@@ -6,16 +6,27 @@ import tensorflow as tf
 
 class Model(metaclass=ABCMeta):
   def __init__(self, inputs, labels):
+    self.inputs = inputs
+    self.labels = labels
     self.model = self._make(inputs, labels)
     self.softmax = self.model.softmax
     self.loss = self.model.loss
-    self.phase = self._phases(self.model, input, labels)
+    self._phase = self._phases(self.model)
 
-  def _phases(self, model, input, labels):
+  def phase(self, p):
+    if p in self._phase:
+      return self._phase[p]
+
+    if p == pt.Phase.test:
+      self._phase[p] = self.model.softmax.evaluate_classifier(self.labels, phase=pt.Phase.test)
+    elif p == pt.Phase.train:
+      self._phase[p] = pt.apply_optimizer(self._optimizer(), losses=[self.model.loss])
+
+    return self._phase[p]
+
+  def _phases(self, model):
     return {
-      pt.Phase.test: model.softmax.evaluate_classifier(labels, phase=pt.Phase.test),
       pt.Phase.infer: model.softmax,
-      pt.Phase.train: pt.apply_optimizer(self._optimizer(), losses=[model.loss])
     }
 
   def _optimizer(self):
