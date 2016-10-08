@@ -35,7 +35,7 @@ NUM_LABELS = 10
 
 tf.app.flags.DEFINE_string('save_path', "data/mnist/model.chkpt", 'Where to save the model checkpoints.')
 tf.app.flags.DEFINE_string('model', 'conv', 'Choose one of the models, either full or conv')
-tf.app.flags.DEFINE_string('mode', 'train', 'Either train or infer')
+tf.app.flags.DEFINE_string('mode', 'train', 'train, test, or infer')
 tf.app.flags.DEFINE_string('input', None, 'Input file for inference')
 FLAGS = tf.app.flags.FLAGS
 
@@ -76,13 +76,18 @@ def train(runner, model):
   # Grab the data as numpy arrays.
   train_images, train_labels = data_utils.mnist(training=True)
   test_images, test_labels = data_utils.mnist(training=False)
+
+  # Load these phases
+  model_train = model.phase(pt.Phase.train)
+  model_test = model.phase(pt.Phase.test)
+
   with tf.Session():
     for epoch in range(10):
       # Shuffle the training data.
       train_images, train_labels = data_utils.permute_data((train_images, train_labels))
 
       runner.train_model(
-        model.phase(pt.Phase.train),
+        model_train,
         model.loss,
         EPOCH_SIZE,
         feed_vars=(model.inputs, model.labels),
@@ -90,12 +95,26 @@ def train(runner, model):
         print_every=100
       )
       classification_accuracy = runner.evaluate_model(
-        model.phase(pt.Phase.test),
+        model_test,
         TEST_SIZE,
         feed_vars=(model.inputs, model.labels),
         feed_data=pt.train.feed_numpy(BATCH_SIZE, test_images, test_labels)
       )
       print('Accuracy after %d epoch %g%%' % (epoch + 1, classification_accuracy * 100))
+
+
+def test(runner, model):
+  test_images, test_labels = data_utils.mnist(training=False)
+  model_test = model.phase(pt.Phase.test)
+
+  with tf.Session():
+    classification_accuracy = runner.evaluate_model(
+      model_test,
+      TEST_SIZE,
+      feed_vars=(model.inputs, model.labels),
+      feed_data=pt.train.feed_numpy(BATCH_SIZE, test_images, test_labels)
+    )
+    print('Accuracy %g%%' % (classification_accuracy * 100))
 
 def infer(runner, model):
   im = Image.open(FLAGS.input, 'r').convert('L')
@@ -139,6 +158,8 @@ def main(_=None):
     train(runner, model)
   elif FLAGS.mode == 'infer':
     infer(runner, model)
+  elif FLAGS.mode == 'test':
+    test(runner, model)
   else:
     raise ValueError('mode must be train or infer: %s' % FLAGS.mode)
 
